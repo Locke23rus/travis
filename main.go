@@ -16,23 +16,25 @@ var commands = map[string]string{
 
 const (
 	version = "0.0.1dev"
+	ORG_URI = "https://api.travis-ci.org/"
+	PRO_URI = "https://api.travis-ci.com/"
 )
 
-type ConfigEndpoint struct {
+type EndpointConfig struct {
 	AccessToken string "access_token"
 }
 
-type ConfigLastCheck struct {
+type LastCheckConfig struct {
 	Etag    string "etag"
 	Version string "version"
 	At      int    "at"
 }
 
 type Config struct {
-	LastCheck         ConfigLastCheck           "last_check"
-	CheckedCompletion bool                      "checked_completion"
-	CompletionVersion string                    "completion_version"
-	Endpoints         map[string]ConfigEndpoint "endpoints"
+	LastCheck         LastCheckConfig            "last_check"
+	CheckedCompletion bool                       "checked_completion"
+	CompletionVersion string                     "completion_version"
+	Endpoints         map[string]*EndpointConfig "endpoints"
 }
 
 func (config Config) Copy() Config {
@@ -43,6 +45,7 @@ var config = Config{}
 var original_config = Config{}
 var access_token string
 var isDebug bool
+var api_endpoint = ORG_URI // TODO: Fetch from session
 
 func main() {
 	if len(os.Args) > 1 {
@@ -54,7 +57,7 @@ func main() {
 		case "help":
 			RunHelp()
 		case "token":
-			RunToken()
+			apiExecute(RunToken)
 		case "version":
 			RunVersion()
 		case "load_config":
@@ -80,24 +83,38 @@ func RunVersion() {
 }
 
 func RunToken() {
+	authenticate()
+	fmt.Printf("Your access token is %s\n", ColotImportant(access_token))
+}
 
+func authenticate() {
 	if access_token == "" {
 		fmt.Fprintf(os.Stderr,
 			ColorError("not logged in, please run %s\n"),
 			command("login"))
 		os.Exit(1)
-	} else {
-		fmt.Printf("Your access token is %s\n", ColotImportant(access_token))
 	}
-}
-
-func authenticate() {
-
 }
 
 func fetchToken() string {
 	token := os.Getenv("TRAVIS_TOKEN")
+	if token == "" {
+		return endpoint_config().AccessToken
+	}
 	return token
+}
+
+func endpoint_config() *EndpointConfig {
+	if config.Endpoints == nil {
+		config.Endpoints = make(map[string]*EndpointConfig)
+	}
+
+	if endpoint, found := config.Endpoints[api_endpoint]; found {
+		return endpoint
+	}
+
+	config.Endpoints[api_endpoint] = &EndpointConfig{}
+	return config.Endpoints[api_endpoint]
 }
 
 func command(name string) string {
@@ -143,7 +160,7 @@ func LoadConfig() {
 	} else {
 		err = yaml.Unmarshal(data, &config)
 		exitIfErr(err)
-		fmt.Println(config)
+
 		original_config = config.Copy()
 	}
 }
@@ -180,4 +197,54 @@ func exitIfErr(err error) {
 		warn(fmt.Sprint(err))
 		os.Exit(1)
 	}
+}
+
+func execute(cmd func()) {
+	// setup_trap
+	// check_ruby
+	// check_arity(method(:run), *arguments)
+	LoadConfig()
+	// check_version
+	// check_completion
+	// setup
+	cmd()
+	// clear_error
+	// store_config
+	// rescue Travis::Client::NotLoggedIn => e
+	// raise(e) if explode?
+	// error "#{e.message} - try running #{command("login#{endpoint_option}")}"
+	// rescue StandardError => e
+	// raise(e) if explode?
+	// message = e.message
+	// message += color("\nfor a full error report, run #{command("report#{endpoint_option}")}", :error) if interactive?
+	// store_error(e)
+	// error(message)
+
+}
+
+func apiSetup() {
+	// setup_enterprise
+	// self.api_endpoint = default_endpoint if default_endpoint and not explicit_api_endpoint?
+	access_token = fetchToken()
+	if endpoint_config().AccessToken == "" {
+		endpoint_config().AccessToken = access_token
+	}
+	// endpoint_config['access_token'] ||= access_token
+	// endpoint_config['insecure']       = insecure unless insecure.nil?
+	// self.insecure                     = endpoint_config['insecure']
+	// session.ssl                       = { :verify => false } if insecure?
+	// authenticate if pro? or enterprise?
+
+	data, err := yaml.Marshal(&config)
+	if err != nil {
+		// log.Fatalf("error: %v", err)
+	}
+	fmt.Print(string(data))
+}
+
+func apiExecute(cmd func()) {
+	execute(func() {
+		apiSetup()
+		cmd()
+	})
 }
