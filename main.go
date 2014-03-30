@@ -35,6 +35,7 @@ type Config struct {
 	CheckedCompletion bool                       "checked_completion"
 	CompletionVersion string                     "completion_version"
 	Endpoints         map[string]*EndpointConfig "endpoints"
+	DefaultEndpoint   string                     "default_endpoint,omitempty"
 }
 
 func (config Config) Copy() Config {
@@ -45,7 +46,8 @@ var config = Config{}
 var original_config = Config{}
 var access_token string
 var isDebug bool
-var api_endpoint = ORG_URI // TODO: Fetch from session
+var api_endpoint = ORG_URI
+var explicit_api_endpoint = false
 
 func main() {
 	if len(os.Args) > 1 {
@@ -91,9 +93,44 @@ func authenticate() {
 	if access_token == "" {
 		fmt.Fprintf(os.Stderr,
 			ColorError("not logged in, please run %s\n"),
-			command("login"))
+			command(fmt.Sprintf("login%s", endpointOption())))
 		os.Exit(1)
 	}
+}
+
+func isOrg() bool {
+	return api_endpoint == ORG_URI
+}
+
+func isPro() bool {
+	return api_endpoint == PRO_URI
+}
+
+func isDetectedEndpoint() bool {
+	return api_endpoint == detectedEndpoint()
+}
+
+func detectedEndpoint() string {
+	endpoint := defaultEndpoint()
+	if endpoint == "" {
+		endpoint = ORG_URI
+	}
+	return endpoint
+}
+
+func endpointOption() string {
+	if isOrg() && isDetectedEndpoint() {
+		return ""
+	}
+	if isOrg() {
+		return " --org"
+	}
+	if isPro() {
+		return " --pro"
+	}
+
+	// TODO: add option for config['enterprise']
+	return fmt.Sprintf(" -e \"%s\"", api_endpoint)
 }
 
 func fetchToken() string {
@@ -167,7 +204,7 @@ func LoadConfig() {
 
 func loadFile(name string) ([]byte, error) {
 	config_path := configPath(name)
-	debug(fmt.Sprintf("Loading ‘%s‘", config_path))
+	debug(fmt.Sprintf("Loading \"%s\"", config_path))
 	return ioutil.ReadFile(config_path)
 }
 
@@ -224,12 +261,14 @@ func execute(cmd func()) {
 
 func apiSetup() {
 	// setup_enterprise
-	// self.api_endpoint = default_endpoint if default_endpoint and not explicit_api_endpoint?
+	endpoint := defaultEndpoint()
+	if endpoint != "" && !explicit_api_endpoint {
+		setApiEndpoint(endpoint)
+	}
 	access_token = fetchToken()
 	if endpoint_config().AccessToken == "" {
 		endpoint_config().AccessToken = access_token
 	}
-	// endpoint_config['access_token'] ||= access_token
 	// endpoint_config['insecure']       = insecure unless insecure.nil?
 	// self.insecure                     = endpoint_config['insecure']
 	// session.ssl                       = { :verify => false } if insecure?
@@ -247,4 +286,17 @@ func apiExecute(cmd func()) {
 		apiSetup()
 		cmd()
 	})
+}
+
+func setApiEndpoint(uri string) {
+	explicit_api_endpoint = true
+	api_endpoint = uri
+}
+
+func defaultEndpoint() string {
+	endpoint := os.Getenv("TRAVIS_ENDPOINT")
+	if endpoint == "" {
+		endpoint = config.DefaultEndpoint
+	}
+	return endpoint
 }
