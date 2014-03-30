@@ -62,8 +62,6 @@ func main() {
 			apiExecute(RunToken)
 		case "version":
 			RunVersion()
-		case "load_config":
-			LoadConfig()
 		}
 	} else {
 		RunHelp()
@@ -238,7 +236,6 @@ func exitIfErr(err error) {
 
 func execute(cmd func()) {
 	// setup_trap
-	// check_ruby
 	// check_arity(method(:run), *arguments)
 	LoadConfig()
 	// check_version
