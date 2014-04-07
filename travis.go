@@ -15,7 +15,7 @@ var commands = map[string]string{
 }
 
 const (
-	version = "0.0.1dev"
+	Version = "0.0.1dev"
 	ORG_URI = "https://api.travis-ci.org/"
 	PRO_URI = "https://api.travis-ci.com/"
 )
@@ -56,11 +56,11 @@ func main() {
 		default:
 			fmt.Printf("unknown command %s\n", os.Args[1])
 			os.Exit(1)
-		case "help":
+		case "help", "--help", "-h", "-?":
 			RunHelp()
 		case "token":
 			apiExecute(RunToken)
-		case "version":
+		case "version", "-v", "--version":
 			RunVersion()
 		}
 	} else {
@@ -79,7 +79,7 @@ func RunHelp() {
 }
 
 func RunVersion() {
-	fmt.Println(version)
+	fmt.Println(Version)
 }
 
 func RunToken() {
